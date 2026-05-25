@@ -1,46 +1,25 @@
 #!/bin/bash
 set -e
 
-echo "Initializing database..."
+echo "Starting Telegram Bot..."
 
-# Wait for MySQL to be ready
-until php -r "
-try {
-    \$dsn = 'mysql:host=' . getenv('DB_HOST') . ';charset=' . getenv('DB_CHARSET');
-    \$pdo = new PDO(\$dsn, getenv('DB_USER'), getenv('DB_PASS'));
-    echo 'MySQL is ready\n';
-} catch (Exception \$e) {
-    echo 'Waiting for MySQL...\n';
-    exit(1);
-}
-"; do
-    echo "Waiting for database connection..."
-    sleep 3
-done
-
-# Import schema if tables don't exist
-php -r "
-try {
-    \$dsn = 'mysql:host=' . getenv('DB_HOST') . ';dbname=' . getenv('DB_NAME') . ';charset=' . getenv('DB_CHARSET');
-    \$pdo = new PDO(\$dsn, getenv('DB_USER'), getenv('DB_PASS'));
-    \$stmt = \$pdo->query(\"SHOW TABLES LIKE 'transactions'\");
-    if (\$stmt->rowCount() === 0) {
-        \$sql = file_get_contents('/var/www/html/database/schema.sql');
-        \$statements = array_filter(array_map('trim', explode(';', \$sql)));
-        foreach (\$statements as \$statement) {
-            if (!empty(\$statement) && !preg_match('/^(--|CREATE DATABASE|USE)/i', \$statement)) {
-                \$pdo->exec(\$statement);
-            }
-        }
-        echo \"Database schema imported successfully\\n\";
-    } else {
-        echo \"Database already initialized\\n\";
-    }
-} catch (Exception \$e) {
-    echo \"Database init error: \" . \$e->getMessage() . \"\\n\";
-}
+# 等待 MySQL 就绪
+python3 -c "
+import pymysql, os, time
+host = os.getenv('DB_HOST') or os.getenv('MYSQLHOST') or 'localhost'
+user = os.getenv('DB_USER') or os.getenv('MYSQLUSER') or 'root'
+password = os.getenv('DB_PASS') or os.getenv('MYSQLPASSWORD') or ''
+for i in range(30):
+    try:
+        conn = pymysql.connect(host=host, user=user, password=password, connect_timeout=3)
+        conn.close()
+        print('MySQL is ready')
+        break
+    except Exception:
+        print(f'Waiting for MySQL... ({i+1}/30)')
+        time.sleep(2)
 "
 
-# Start Apache
-echo "Starting Apache..."
-apache2-foreground
+# 启动应用
+cd /app
+gunicorn main:app --bind 0.0.0.0:${PORT:-8080} --workers 1 --threads 2 --worker-class sync --timeout 120

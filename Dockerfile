@@ -1,39 +1,23 @@
-FROM php:8.2-apache
+FROM python:3.11-slim
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+WORKDIR /app
 
-# Install MySQL PDO driver and other dependencies
-RUN docker-php-ext-install pdo pdo_mysql mbstring
+# 安装系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    default-mysql-client \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy application to web root
-COPY telegrambot/ /var/www/html/
+# 安装 Python 依赖
+COPY telegrambot/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Create required directories and set permissions
-RUN mkdir -p /var/www/html/logs /var/www/html/uploads /var/www/html/temp \
-    && chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html \
-    && chmod -R 777 /var/www/html/logs /var/www/html/uploads /var/www/html/temp
+# 复制应用代码
+COPY telegrambot/ /app/
 
-# Configure Apache to allow .htaccess override
-RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
-
-# Apache config
-RUN echo "<VirtualHost *:\${PORT:-80}>\n\
-    DocumentRoot /var/www/html\n\
-    <Directory /var/www/html>\n\
-        Options Indexes FollowSymLinks\n\
-        AllowOverride All\n\
-        Require all granted\n\
-    </Directory>\n\
-    ErrorLog /var/www/html/logs/apache_error.log\n\
-    CustomLog /var/www/html/logs/apache_access.log combined\n\
-</VirtualHost>" > /etc/apache2/sites-available/000-default.conf
-
-# Startup script
+# 复制启动脚本
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-EXPOSE 80
+EXPOSE 8080
 
 ENTRYPOINT ["/start.sh"]

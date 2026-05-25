@@ -1,9 +1,8 @@
 .git
 .gitignore
 railway.toml
-Dockerfile
 *.md
 *.log
-logs/
-temp/
-uploads/
+__pycache__/
+*.pyc
+*.pyo
