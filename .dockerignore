@@ -1,0 +1,9 @@
+.git
+.gitignore
+railway.toml
+Dockerfile
+*.md
+*.log
+logs/
+temp/
+uploads/
