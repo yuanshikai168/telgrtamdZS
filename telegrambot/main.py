@@ -12,23 +12,29 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from config import BOT_TOKEN, APP_URL, PORT, DB_HOST, DB_NAME, DB_USER, DB_PASS
 from database import Database
-from handler import BotHandler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# 创建 Application
-application = Application.builder().token(BOT_TOKEN).build()
-bot_handler = BotHandler()
+_application = None
+_bot_handler = None
 
-# 注册处理器
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot_handler.handle_message))
-application.add_handler(CommandHandler(
-    ["start", "set", "gd", "usdt", "help"],
-    bot_handler.handle_message,
-))
+
+def get_application():
+    """懒加载创建 Bot Application"""
+    global _application, _bot_handler
+    if _application is None:
+        from handler import BotHandler
+        _application = Application.builder().token(BOT_TOKEN).build()
+        _bot_handler = BotHandler()
+        _application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _bot_handler.handle_message))
+        _application.add_handler(CommandHandler(
+            ["start", "set", "gd", "usdt", "help"],
+            _bot_handler.handle_message,
+        ))
+    return _application, _bot_handler
 
 
 def init_database():
@@ -86,6 +92,7 @@ def _migrate_trial_fields():
 async def webhook():
     """Telegram Webhook 端点"""
     try:
+        application, _ = get_application()
         data = request.get_json(force=True)
         update = Update.de_json(data, application.bot)
         await application.process_update(update)
@@ -204,6 +211,7 @@ def main():
         webhook_url = f"{APP_URL.rstrip('/')}/webhook"
         logger.info(f"设置 Webhook: {webhook_url}")
         import asyncio
+        application, _ = get_application()
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(application.bot.set_webhook(webhook_url))
@@ -212,6 +220,7 @@ def main():
     else:
         # Polling 模式（开发用）
         logger.info("使用 Polling 模式")
+        application, _ = get_application()
         application.run_polling()
 
 
